@@ -11,90 +11,95 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Server {
-  private static final int THREAD_POOL_SIZE = 64;
-  private static final List<String> VALID_PATHS = List.of("/index.html", "/spring.svg", "/spring.png", "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html", "/events.html", "/events.js");
+    private final int threadPoolSize;
+    private final List<String> validPaths;
 
-  public static void main(String[] args) {
-    ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    public Server(int threadPoolSize, List<String> validPaths) {
+        this.threadPoolSize = threadPoolSize;
+        this.validPaths = validPaths;
+    }
 
-    try (ServerSocket serverSocket = new ServerSocket(9999)) {
-      while (true) {
-        try {
-          Socket socket = serverSocket.accept();
-          executorService.execute(() -> handleConnection(socket));
+    public void start(int port) {
+        ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
+
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
+            while (true) {
+                try {
+                    Socket socket = serverSocket.accept();
+                    executorService.execute(() -> handleConnection(socket));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         } catch (IOException e) {
-          e.printStackTrace();
+            e.printStackTrace();
+        } finally {
+            executorService.shutdown();
         }
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-    } finally {
-      executorService.shutdown();
     }
-  }
 
-  private static void handleConnection(Socket socket) {
-    try (
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            BufferedOutputStream out = new BufferedOutputStream(socket.getOutputStream());
-    ) {
-      String requestLine = in.readLine();
-      String[] parts = requestLine.split(" ");
+    private void handleConnection(Socket socket) {
+        try (
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                BufferedOutputStream out = new BufferedOutputStream(socket.getOutputStream());
+        ) {
+            String requestLine = in.readLine();
+            String[] parts = requestLine.split(" ");
 
-      if (parts.length != 3) {
-        return;
-      }
+            if (parts.length != 3) {
+                return;
+            }
 
-      String path = parts[1];
-      if (!VALID_PATHS.contains(path)) {
-        out.write((
-                "HTTP/1.1 404 Not Found\r\n" +
-                        "Content-Length: 0\r\n" +
-                        "Connection: close\r\n" +
-                        "\r\n"
-        ).getBytes());
-        out.flush();
+            String path = parts[1];
+            if (!validPaths.contains(path)) {
+                out.write((
+                        "HTTP/1.1 404 Not Found\r\n" +
+                                "Content-Length: 0\r\n" +
+                                "Connection: close\r\n" +
+                                "\r\n"
+                ).getBytes());
+                out.flush();
 
-        Logger.logRequest(requestLine, 404);
+                Logger.logRequest(requestLine, 404);
 
-        return;
-      }
+                return;
+            }
 
-      Path filePath = Path.of(".", "public", path);
-      String mimeType = Files.probeContentType(filePath);
+            Path filePath = Path.of(".", "public", path);
+            String mimeType = Files.probeContentType(filePath);
 
-      if (path.equals("/classic.html")) {
-        String template = Files.readString(filePath);
-        byte[] content = template.replace(
-                "{time}",
-                LocalDateTime.now().toString()
-        ).getBytes();
-        out.write((
-                "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: " + mimeType + "\r\n" +
-                        "Content-Length: " + content.length + "\r\n" +
-                        "Connection: close\r\n" +
-                        "\r\n"
-        ).getBytes());
-        out.write(content);
-        out.flush();
-        return;
-      }
+            if (path.equals("/classic.html")) {
+                String template = Files.readString(filePath);
+                byte[] content = template.replace(
+                        "{time}",
+                        LocalDateTime.now().toString()
+                ).getBytes();
+                out.write((
+                        "HTTP/1.1 200 OK\r\n" +
+                                "Content-Type: " + mimeType + "\r\n" +
+                                "Content-Length: " + content.length + "\r\n" +
+                                "Connection: close\r\n" +
+                                "\r\n"
+                ).getBytes());
+                out.write(content);
+                out.flush();
+                return;
+            }
 
-      final var length = Files.size(filePath);
-      out.write((
-              "HTTP/1.1 200 OK\r\n" +
-                      "Content-Type: " + mimeType + "\r\n" +
-                      "Content-Length: " + length + "\r\n" +
-                      "Connection: close\r\n" +
-                      "\r\n"
-      ).getBytes());
-      Files.copy(filePath, out);
-      out.flush();
-      Logger.logRequest(requestLine, 200);
-    } catch (IOException e) {
-      e.printStackTrace();
+            final var length = Files.size(filePath);
+            out.write((
+                    "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: " + mimeType + "\r\n" +
+                            "Content-Length: " + length + "\r\n" +
+                            "Connection: close\r\n" +
+                            "\r\n"
+            ).getBytes());
+            Files.copy(filePath, out);
+            out.flush();
+            Logger.logRequest(requestLine, 200);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
-  }
 }
 
