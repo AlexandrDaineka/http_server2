@@ -1,8 +1,12 @@
 package ru.netology;
 
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
+
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class Request {
@@ -146,5 +150,23 @@ public class Request {
             return i;
         }
         return -1;
+    }
+
+    public String getQueryParam(String name) {
+        String value = null;
+        String paramsLine = new String(getBody());
+        List<NameValuePair> params = URLEncodedUtils.parse(paramsLine, StandardCharsets.UTF_8);
+        for (NameValuePair param : params) {
+            if (param.getName() == name) {
+                value = param.getValue();
+            }
+        }
+        return value;
+    }
+
+    public List<NameValuePair> getQueryParams() {
+        String paramsLine = new String(getBody());
+        List<NameValuePair> params = URLEncodedUtils.parse(paramsLine, StandardCharsets.UTF_8);
+        return params;
     }
 }
