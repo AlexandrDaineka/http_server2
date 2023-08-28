@@ -14,6 +14,7 @@ public class Request {
     private final String path;
     private final Map<String, String> headers;
     private final String body;
+    private final List<NameValuePair> queryParams;
     private static String GET = "GET";
     private static String POST = "POST";
 
@@ -28,12 +29,12 @@ public class Request {
     }
 
     private Request(String method, String path,
-                    Map<String, String> headers, String body) {
+                    Map<String, String> headers, String body, List<NameValuePair> queryParams) {
         this.method = method;
         this.path = path;
         this.headers = headers;
         this.body = body;
-
+        this.queryParams = queryParams;
     }
 
     public String getMethod() {
@@ -51,6 +52,7 @@ public class Request {
     public String getBody() {
         return body;
     }
+
 
     public static Request fromInputStream(InputStream inn) throws IOException {
         var in = new BufferedInputStream(inn);
@@ -80,13 +82,11 @@ public class Request {
         if (!allowedMethods.contains(method)) {
             throw new IOException("Invalid request");
         }
-        System.out.println(method);
 
         final var path = requestLine[1];
         if (!path.startsWith("/")) {
             throw new IOException("Invalid request");
         }
-        System.out.println(path);
 
         // ищем заголовки
         final var headersDelimiter = new byte[]{'\r', '\n', '\r', '\n'};
@@ -110,7 +110,6 @@ public class Request {
             String value = header.substring(i + 2);
             headerMap.put(name, value);
         }
-        System.out.println(headers);
 
         // для GET тела нет
         String body = null;
@@ -123,11 +122,14 @@ public class Request {
                 final var bodyBytes = in.readNBytes(length);
 
                 body = new String(bodyBytes);
-                System.out.println(body);
-
             }
         }
-        return new Request(method, path, headerMap, body);
+
+        // парсим query params
+        String paramsLine = path.contains("?") ? path.substring(path.indexOf("?") + 1) : "";
+        List<NameValuePair> queryParams = URLEncodedUtils.parse(paramsLine, StandardCharsets.UTF_8);
+
+        return new Request(method, path, headerMap, body, queryParams);
     }
 
     private static Optional<String> extractHeader(List<String> headers, String header) {
@@ -154,10 +156,8 @@ public class Request {
 
     public String getQueryParam(String name) {
         String value = null;
-        String paramsLine = new String(getBody());
-        List<NameValuePair> params = URLEncodedUtils.parse(paramsLine, StandardCharsets.UTF_8);
-        for (NameValuePair param : params) {
-            if (param.getName() == name) {
+        for (NameValuePair param : queryParams) {
+            if (param.getName().equals(name)) {
                 value = param.getValue();
             }
         }
@@ -165,8 +165,6 @@ public class Request {
     }
 
     public List<NameValuePair> getQueryParams() {
-        String paramsLine = new String(getBody());
-        List<NameValuePair> params = URLEncodedUtils.parse(paramsLine, StandardCharsets.UTF_8);
-        return params;
+        return queryParams;
     }
 }
